@@ -5,7 +5,7 @@ import japanize_matplotlib
 import math
 
 st.title("クレーンゲーム フック攻略予測")
-st.write("設定に合わせて重心の計算方法を選び、ベストな奥移動のタイミングを算出します。")
+st.write("パーツの寸法から重心を自動計算し、ベストな奥移動のタイミングを算出します。")
 
 # --- 入力フォーム ---
 st.sidebar.header("1. 重心の設定")
@@ -16,20 +16,27 @@ mode = st.sidebar.radio("計算モード", ["自動計算 (チェーン＋リン
 if mode == "自動計算 (チェーン＋リング)":
     st.sidebar.caption("※チェーン5mm/リング4mmの鉄製として計算")
     L_chain = st.sidebar.number_input("チェーンの長さ (cm)", value=15.0, step=1.0, format="%.1f")
-    D_ring = st.sidebar.number_input("リングの外径 (cm)", value=5.0, step=0.1, format="%.1f")
+    # 「外径」から「直径」にラベルを変更
+    D_ring = st.sidebar.number_input("リングの直径 (cm)", value=5.0, step=0.1, format="%.1f")
     
-    # 内部計算
+    # 内部計算：鉄/ステンレスの密度 7.8g/cm³
     density = 7.8 
-    d_chain = 5.0 
-    d_ring = 4.0  
+    d_chain = 5.0 # mm
+    d_ring = 4.0  # mm
+    
+    # チェーンの質量計算
     r_chain_cm = (d_chain / 10.0) / 2.0
     m_chain = 2 * (math.pi * r_chain_cm**2) * L_chain * density
     y_chain = L_chain / 2.0
+    
+    # リングの質量計算 (トーラスの体積 V = (πr²)(2πR) )
     r_ring_cm = (d_ring / 10.0) / 2.0
+    # R_center はリングの中心軸から金属線の中心までの半径
     R_center_cm = (D_ring / 2.0) - r_ring_cm
     m_ring = (math.pi * r_ring_cm**2) * (2 * math.pi * R_center_cm) * density
     y_ring = L_chain + (D_ring / 2.0)
     
+    # 全体の重心距離 L_cm (支点からの距離)
     L_cm = (m_chain * y_chain + m_ring * y_ring) / (m_chain + m_ring) if (m_chain + m_ring) > 0 else 0
     calc_info = f"推定質量: チェーン約 {m_chain:.0f}g / リング約 {m_ring:.0f}g"
 
@@ -44,24 +51,30 @@ t_d = st.sidebar.number_input("奥移動〜落下までの時間 (秒)", value=1
 hook_clock = st.sidebar.number_input("フックの向き (時計の文字盤: 1〜12)", value=3.0, step=1.0, min_value=1.0, max_value=12.0)
 
 # --- 物理計算 ---
-L_m = L_cm / 100.0  
+L_m = L_cm / 100.0  # メートル換算
 g = 9.80665
 
 if L_m > 0:
+    # 周期 T = 2π√(L/g)
     T = 2 * math.pi * math.sqrt(L_m / g)
+    
+    # 落下中の位相の進み
     phase_advance_deg = (t_d % T) / T * 360
     
+    # フックの角度 (3時=0度, 12時=90度, 9時=180度, 6時=270度)
     target_deg = (3 - hook_clock) * 30
     if target_deg < 0:
         target_deg += 360
     hook_rad = math.radians(target_deg)
 
+    # 目標：落下時にリングがフック側から中心に向かって通過する瞬間 (位相180度)
     press_phase_deg = (180 - phase_advance_deg) % 360
     press_phase_rad = math.radians(press_phase_deg)
     
     displacement = math.sin(press_phase_rad) 
     velocity = math.cos(press_phase_rad)
 
+    # 各軸成分への分解
     x_pos = displacement * math.cos(hook_rad)
     y_pos = displacement * math.sin(hook_rad)
     v_x = velocity * math.cos(hook_rad)
@@ -71,15 +84,15 @@ if L_m > 0:
     
     st.markdown(f"""
     **【適用パラメータ】**
-    * 使用する重心距離: **支点から {L_cm:.1f} cm** ({calc_info})
-    * 揺れの周期 (1往復): 約 {T:.2f} 秒
+    * 重心距離: **支点から {L_cm:.1f} cm** ({calc_info})
+    * 揺れの周期: 約 **{T:.2f} 秒**
     """)
     
     x_pos_text = "右" if x_pos >= 0 else "左"
     x_dir_text = "右" if v_x >= 0 else "左"
     
     if abs(y_pos) < 0.01:
-        y_pos_text = "中心付近（前後の振れなし）"
+        y_pos_text = "中心付近"
     else:
         y_pos_text = "奥" if y_pos > 0 else "手前"
 
@@ -89,14 +102,14 @@ if L_m > 0:
     * **左右（X軸）:** リングが **【{x_pos_text}側に約 {abs(x_pos*100):.0f}%】** 振れ、**【{x_dir_text}方向】** に動いている瞬間！
     """)
 
-    # --- 1次元グラフ描画 ---
+    # --- 1次元グラフ描画 (X軸) ---
     fig, ax = plt.subplots(figsize=(8, 3)) 
     ax.plot([-1.2, 1.2], [0, 0], color='black', linewidth=1.5)
     ax.plot([-1, 1], [0, 0], '|', color='gray', markersize=20)
     ax.axvline(0, color='gray', linestyle=':', linewidth=1)
     ax.text(-1, 0.1, "左端", ha='center', fontsize=12)
     ax.text(1, 0.1, "右端", ha='center', fontsize=12)
-    ax.text(0, -0.25, "中心\n(落下目標)", ha='center', fontsize=12, color='blue')
+    ax.text(0, -0.25, "中心 (目標)", ha='center', fontsize=12, color='blue')
     ax.plot(0, 0, 'ko', markersize=6) 
     ax.plot(x_pos, 0, 'ro', markersize=15)
     
@@ -110,4 +123,4 @@ if L_m > 0:
     ax.axis('off') 
     st.pyplot(fig)
 else:
-    st.error("有効な値を入力してください。")
+    st.error("有効な数値を入力してください。")
