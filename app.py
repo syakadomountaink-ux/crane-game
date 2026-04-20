@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import japanize_matplotlib
 import math
 
-st.title("クレーンゲーム 横揺れ(X軸)攻略予測")
+st.title("クレーンゲーム フック攻略予測")
 st.write("設定に合わせて重心の計算方法を選び、ベストな奥移動のタイミングを算出します。")
 
 # --- 入力フォーム ---
