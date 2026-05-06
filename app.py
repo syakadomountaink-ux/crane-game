@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import japanize_matplotlib
 import math
 
-st.title("クレーンゲーム 横揺れ(X軸)攻略予測")
+st.title("クレーンゲーム リング攻略")
 st.write("実測データ（線密度）に基づいた重心計算を行い、最適なタイミングを算出します。")
 
 # --- 入力フォーム ---
@@ -14,13 +14,13 @@ st.sidebar.header("1. 重心の設定")
 mode = st.sidebar.radio("計算モード", ["自動計算 (チェーン＋リング)", "手動入力 (重心距離を直接指定)"])
 
 if mode == "自動計算 (チェーン＋リング)":
-    # チェーンの仕様選択
-    chain_type = st.sidebar.selectbox("チェーンの線径 (モノタロウ実測値データ)", ["2.0mm (0.82g/cm)", "1.6mm (0.58g/cm)"])
+    # 文字を削り、1.6mmを先頭（初期値）に配置
+    chain_type = st.sidebar.selectbox("チェーンの線径", ["1.6mm (0.58g/cm)", "2.0mm (0.82g/cm)"])
     L_chain = st.sidebar.number_input("チェーンの長さ (cm)", value=15.0, step=1.0, format="%.1f")
     D_ring = st.sidebar.number_input("リングの直径 (cm)", value=5.0, step=0.1, format="%.1f")
     
     # チェーンの質量計算 (実測値ベース)
-    chain_density = 0.82 if "2.0mm" in chain_type else 0.58
+    chain_density = 0.58 if "1.6mm" in chain_type else 0.82
     m_chain = chain_density * L_chain
     y_chain = L_chain / 2.0
     
@@ -42,7 +42,8 @@ else:
 st.sidebar.divider()
 
 st.sidebar.header("2. プレイ条件")
-t_d = st.sidebar.number_input("奥移動〜落下までの時間 (秒)", value=1.00, step=0.1, format="%.2f")
+# 初期の落下時間を3.00秒に変更
+t_d = st.sidebar.number_input("奥移動〜落下までの時間 (秒)", value=3.00, step=0.1, format="%.2f")
 hook_clock = st.sidebar.number_input("フックの向き (時計の文字盤: 1〜12)", value=3.0, step=1.0, min_value=1.0, max_value=12.0)
 
 # --- 物理計算 ---
