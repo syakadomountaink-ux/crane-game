@@ -42,7 +42,7 @@ def calc_timing(T, t_d, hook_clock):
 # 左側メニュー (パラメータ入力)
 # ==========================================
 st.sidebar.header("1. プレイ条件 (共通)")
-t_d = st.sidebar.number_input("奥移動〜落下までの時間 (秒)", value=3.00, step=0.1, format="%.2f")
+t_d = st.sidebar.number_input("奥移動〜落下までの時間 (秒)", value=3.20, step=0.1, format="%.2f")
 hook_clock = st.sidebar.number_input("フックの向き (時計の文字盤: 1〜12)", value=3.0, step=1.0, min_value=1.0, max_value=12.0)
 
 st.sidebar.divider()
