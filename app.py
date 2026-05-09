@@ -11,9 +11,13 @@ st.set_page_config(page_title="クレーンゲーム攻略予測", layout="wide"
 st.title("クレーンゲーム 横揺れ(X軸)攻略予測")
 st.write("自動計算（赤）と手動の周期（青）を同時に比較し、ベストなタイミングを算出・保存します。")
 
-# --- 保存データの初期化 (セッションステート) ---
+# --- 保存データと入力欄の初期化 (セッションステート) ---
 if "saved_configs" not in st.session_state:
     st.session_state.saved_configs = []
+
+# 店舗・筐体名の初期値を今日の日付にする
+if "store_name" not in st.session_state:
+    st.session_state.store_name = f"{datetime.now().strftime('%m/%d')} 〇〇店 UFO9 1番台 右側"
 
 # --- 共通の計算関数 ---
 def calc_timing(T, t_d, hook_clock):
@@ -64,18 +68,14 @@ g = 9.80665
 
 T_auto = 2 * math.pi * math.sqrt((L_cm / 100.0) / g) if L_cm > 0 else 0
 x_auto, y_auto, vx_auto = calc_timing(T_auto, t_d, hook_clock)
-
-# ★修正ポイント：ここで先に方向の文字を確定させておく
 dir_auto = "右" if vx_auto >= 0 else "左"
 
 st.sidebar.divider()
 
 st.sidebar.header("3. 🔵手動入力 (周期指定)")
 st.sidebar.caption("ストップウォッチ等で測った1往復の秒数")
-T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.00, step=0.01, format="%.2f")
+T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.85, step=0.01, format="%.2f")
 x_manual, y_manual, vx_manual = calc_timing(T_manual, t_d, hook_clock)
-
-# ★修正ポイント：ここで先に方向の文字を確定させておく
 dir_manual = "右" if vx_manual >= 0 else "左"
 
 # ==========================================
@@ -136,23 +136,29 @@ st.subheader("💾 現在のパラメータを保存")
 
 save_col1, save_col2 = st.columns([3, 1])
 with save_col1:
-    save_name = st.text_input("この設定の名前 (例: 設定A, 初期位置 など)")
+    # key="store_name" とすることで、入力した文字が自動で保持されます
+    st.text_input("店舗・筐体名 (例: 〇〇店 UFO9 1番台 右側)", key="store_name")
 with save_col2:
-    st.write("") # ボタンの位置合わせ用
+    st.write("") 
     if st.button("設定を保存する"):
-        if save_name:
+        if st.session_state.store_name:
+            # 入力された全パラメータを記録
+            chain_mm = chain_type.split(" ")[0] # "1.6mm" の部分だけ抽出
+            
             st.session_state.saved_configs.append({
-                "設定名": save_name,
+                "店舗_筐体名": st.session_state.store_name,
                 "落下時間": f"{t_d:.2f}秒",
                 "フック向き": f"{hook_clock}時",
+                "チェーン": f"{chain_mm}, 長さ{L_chain:.1f}cm",
+                "リング": f"直径{D_ring:.1f}cm",
                 "自動_周期": f"{T_auto:.2f}秒",
                 "自動_位置": f"{abs(x_auto*100):.0f}% (VX:{dir_auto})",
                 "手動_周期": f"{T_manual:.2f}秒",
                 "手動_位置": f"{abs(x_manual*100):.0f}% (VX:{dir_manual})"
             })
-            st.success(f"「{save_name}」を保存しました！画面下部に追加されています。")
+            st.success(f"保存しました！画面下部に追加されています。")
         else:
-            st.warning("設定名を入力してください。")
+            st.warning("店舗・筐体名を入力してください。")
 
 
 # ==========================================
@@ -161,29 +167,23 @@ with save_col2:
 if len(st.session_state.saved_configs) > 0:
     st.divider()
     
-    # 今日の日付を初期値に設定
-    today_str = datetime.now().strftime("%m/%d")
-    
     st.subheader("📸 スクショ用 攻略メモ出力")
-    st.write("店舗名や筐体名を入力し、この下にある枠の中をスクリーンショットしてください。")
-    
-    # タイトルの入力欄
-    memo_title = st.text_input("📝 メモのタイトルを変更", value=f"{today_str} 〇〇店 UFO9 1番台 右側")
+    st.write("この下にある枠の中をスクリーンショットしてください。")
 
     # --- ここから下がスクショに最適なエリア ---
     with st.container(border=True):
-        st.markdown(f"## {memo_title}")
         st.caption("※VXは動く方向（Velocity X）を示します。")
         
-        # 1件ずつカード状に表示
-        for data in st.session_state.saved_configs:
+        # 1件ずつカード状に表示し、すべてのパラメータを網羅
+        for data in reversed(st.session_state.saved_configs): # 新しい保存が上に来るようにreversedを追加
             with st.container(border=True): 
-                st.markdown(f"#### 🕹️ {data['設定名']}")
-                st.markdown(f"**落下時間:** {data['落下時間']} / **フック:** {data['フック向き']}")
-                st.markdown(f"🔴 **自動計算:** 左右 **{data['自動_位置']}** (周期 {data['自動_周期']})")
-                st.markdown(f"🔵 **手動入力:** 左右 **{data['手動_位置']}** (周期 {data['手動_周期']})")
+                st.markdown(f"### 🕹️ {data['店舗_筐体名']}")
+                st.markdown(f"**🔹 プレイ条件:** 落下 **{data['落下時間']}** / フック **{data['フック向き']}** / 手動周期 **{data['手動_周期']}**")
+                st.markdown(f"**🔹 パーツ寸法:** チェーン **{data['チェーン']}** / リング **{data['リング']}**")
+                st.markdown(f"🔴 **自動計算:** 左右 **{data['自動_位置']}** (計算周期 {data['自動_周期']})")
+                st.markdown(f"🔵 **手動入力:** 左右 **{data['手動_位置']}**")
 
-    st.write("") # スペース空け
+    st.write("") 
     
     # リセットボタン
     if st.button("🗑️ 保存データをすべて消去"):
