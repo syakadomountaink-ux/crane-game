@@ -5,7 +5,7 @@ import japanize_matplotlib
 import math
 from datetime import datetime
 
-# ページ設定（スマホでも見やすいように画面幅を広く使う）
+# ページ設定
 st.set_page_config(page_title="クレーンゲーム攻略予測", layout="wide")
 
 st.title("クレーンゲーム 横揺れ(X軸)攻略予測")
@@ -65,12 +65,18 @@ g = 9.80665
 T_auto = 2 * math.pi * math.sqrt((L_cm / 100.0) / g) if L_cm > 0 else 0
 x_auto, y_auto, vx_auto = calc_timing(T_auto, t_d, hook_clock)
 
+# ★修正ポイント：ここで先に方向の文字を確定させておく
+dir_auto = "右" if vx_auto >= 0 else "左"
+
 st.sidebar.divider()
 
 st.sidebar.header("3. 🔵手動入力 (周期指定)")
 st.sidebar.caption("ストップウォッチ等で測った1往復の秒数")
-T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.00, step=0.01, format="%.2f")
+T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.85, step=0.01, format="%.2f")
 x_manual, y_manual, vx_manual = calc_timing(T_manual, t_d, hook_clock)
+
+# ★修正ポイント：ここで先に方向の文字を確定させておく
+dir_manual = "右" if vx_manual >= 0 else "左"
 
 # ==========================================
 # メイン画面 (結果とグラフ)
@@ -81,14 +87,12 @@ with col1:
     st.subheader("🔴 自動計算の結果")
     st.write(f"**推定周期:** 約 {T_auto:.2f} 秒 (重心: {L_cm:.1f}cm)")
     if T_auto > 0:
-        dir_auto = "右" if vx_auto >= 0 else "左"
         st.markdown(f"**X軸タイミング:** 【**{'右' if x_auto >= 0 else '左'}側に約 {abs(x_auto*100):.0f}%**】で【**{dir_auto}方向**】に動く瞬間")
 
 with col2:
     st.subheader("🔵 手動入力の結果")
     st.write(f"**設定周期:** {T_manual:.2f} 秒")
     if T_manual > 0:
-        dir_manual = "右" if vx_manual >= 0 else "左"
         st.markdown(f"**X軸タイミング:** 【**{'右' if x_manual >= 0 else '左'}側に約 {abs(x_manual*100):.0f}%**】で【**{dir_manual}方向**】に動く瞬間")
 
 # --- 1次元グラフ描画 ---
