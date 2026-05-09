@@ -8,7 +8,7 @@ from datetime import datetime
 # ページ設定
 st.set_page_config(page_title="クレーンゲーム攻略予測", layout="wide")
 
-st.title("クレーンゲーム 横揺れ(X軸)攻略予測")
+st.title("クレーンゲーム リング攻略予測")
 st.write("自動計算（赤）と手動の周期（青）を同時に比較し、ベストなタイミングを算出・保存します。")
 
 # --- 保存データと入力欄の初期化 (セッションステート) ---
