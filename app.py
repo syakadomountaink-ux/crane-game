@@ -69,7 +69,7 @@ st.sidebar.divider()
 
 st.sidebar.header("3. 🔵手動入力 (周期指定)")
 st.sidebar.caption("ストップウォッチ等で測った1往復の秒数")
-T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.85, step=0.01, format="%.2f")
+T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.00, step=0.01, format="%.2f")
 x_manual, y_manual, vx_manual = calc_timing(T_manual, t_d, hook_clock)
 
 # ==========================================
