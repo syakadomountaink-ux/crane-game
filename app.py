@@ -18,12 +18,12 @@ if "store_name" not in st.session_state:
     st.session_state.store_name = f"{datetime.now().strftime('%m/%d')} 〇〇店 UFO9 1番台 右側"
 
 # --- 物理逆算ソルバー ---
-def calc_dynamics(T, t_d, hook_clock, hook_length, v_y_cm_s, L_cm, A_x_cm):
+def calc_dynamics(T, t_d, hook_clock, hook_size, v_y_cm_s, L_cm, A_x_cm):
     if T <= 0 or L_cm <= 0 or A_x_cm <= 0: 
         return 0, 0, 0, 0, 0, 0, 0, "右", False
     
-    # 目標着地点はフックの先端
-    D_hook = hook_length
+    # フックの中心（理想の落下位置）は開口サイズの半分
+    D_hook = hook_size / 2.0
 
     # 1. ターゲット座標 (X_aim, Y_aim)
     target_rad = math.radians((3 - hook_clock) * 30)
@@ -81,7 +81,8 @@ A_x_cm = st.sidebar.number_input("X軸の揺れ幅 (片側最大振幅 cm)", val
 
 st.sidebar.subheader("🎯 フック（原点）の設定")
 hook_clock = st.sidebar.number_input("フックの向き (時計の文字盤: 1〜12)", value=12.0, step=1.0, min_value=1.0, max_value=12.0)
-hook_length = st.sidebar.number_input("フックの長さ (軸〜先端 cm)", value=4.0, step=0.5, format="%.1f")
+hook_size = st.sidebar.number_input("フックの開口サイズ (根元〜先端 cm)", value=4.0, step=0.5, format="%.1f")
+st.sidebar.caption("※リングがフックの中央に落ちるよう自動計算されます。")
 
 st.sidebar.subheader("🚚 筐体の移動スペック")
 v_y_cm_s = st.sidebar.number_input("Y軸の移動速度 (cm/秒)", value=15.0, step=1.0, format="%.1f")
@@ -111,7 +112,7 @@ L_cm = (m_chain * y_chain + m_ring * y_ring) / (m_chain + m_ring) if (m_chain + 
 g = 9.80665
 T_auto = 2 * math.pi * math.sqrt((L_cm / 100.0) / g) if L_cm > 0 else 0
 
-u_x_a, u_y_a, aim_x, aim_y, req_x_a, swing_y_a, push_x_a, dir_a, possible_a = calc_dynamics(T_auto, t_d, hook_clock, hook_length, v_y_cm_s, L_cm, A_x_cm)
+u_x_a, u_y_a, aim_x, aim_y, req_x_a, swing_y_a, push_x_a, dir_a, possible_a = calc_dynamics(T_auto, t_d, hook_clock, hook_size, v_y_cm_s, L_cm, A_x_cm)
 
 st.sidebar.divider()
 
@@ -119,7 +120,7 @@ st.sidebar.header("3. 🔵手動入力 (周期指定)")
 T_manual = st.sidebar.number_input("手動の周期 (秒)", value=0.85, step=0.01, format="%.2f")
 L_manual_cm = g * (T_manual / (2 * math.pi))**2 * 100 if T_manual > 0 else 0
 
-u_x_m, u_y_m, _, _, req_x_m, swing_y_m, push_x_m, dir_m, possible_m = calc_dynamics(T_manual, t_d, hook_clock, hook_length, v_y_cm_s, L_manual_cm, A_x_cm)
+u_x_m, u_y_m, _, _, req_x_m, swing_y_m, push_x_m, dir_m, possible_m = calc_dynamics(T_manual, t_d, hook_clock, hook_size, v_y_cm_s, L_manual_cm, A_x_cm)
 
 # ==========================================
 # メイン画面 (2Dマップと1Dタイミング)
@@ -127,7 +128,8 @@ u_x_m, u_y_m, _, _, req_x_m, swing_y_m, push_x_m, dir_m, possible_m = calc_dynam
 st.subheader("🗺️ 2Dマップ (UFO停止座標と軌道)")
 
 fig2d, ax2d = plt.subplots(figsize=(10, 10))
-max_r = max(10, abs(u_x_a)+5, abs(u_y_a)+5, hook_length+5, abs(swing_y_a)+5, A_x_cm+5)
+# マップの表示範囲を動的に調整
+max_r = max(10, abs(u_x_a)+5, abs(u_y_a)+5, hook_size+5, abs(swing_y_a)+5, A_x_cm+5)
 ax2d.set_xlim(-max_r, max_r)
 ax2d.set_ylim(-max_r, max_r)
 ax2d.grid(True, linestyle='--', alpha=0.5)
@@ -136,14 +138,15 @@ ax2d.grid(True, linestyle='--', alpha=0.5)
 ax2d.axhline(0, color='black', linewidth=1)
 ax2d.axvline(0, color='black', linewidth=1)
 ax2d.plot(0, 0, marker='*', color='gold', markersize=30, markeredgecolor='black', label="フック根元 (0,0)")
-ax2d.arrow(0, 0, aim_x, aim_y, head_width=1.0, head_length=1.5, fc='gold', ec='orange', linewidth=2, alpha=0.5)
+# フックのサイズ感を示す矢印
+ax2d.arrow(0, 0, aim_x*2, aim_y*2, head_width=1.0, head_length=1.5, fc='gold', ec='orange', linewidth=2, alpha=0.5)
 
 # 自動計算のプロット
 if T_auto > 0 and possible_a:
     ax2d.axhline(u_y_a, color='red', linestyle=':', linewidth=1, alpha=0.4)
     ax2d.axvline(u_x_a, color='red', linestyle=':', linewidth=1, alpha=0.4)
     ax2d.plot(u_x_a, u_y_a, marker='X', color='red', markersize=15, label="UFO停止座標 (自動)")
-    ax2d.plot(aim_x, aim_y, marker='o', color='lightcoral', markersize=10, label="目標着地点 (フック先端)")
+    ax2d.plot(aim_x, aim_y, marker='o', color='lightcoral', markersize=10, label="目標着地点 (フック中央)")
     ax2d.annotate('', xy=(u_x_a, u_y_a), xytext=(aim_x, aim_y),
                   arrowprops=dict(facecolor='red', edgecolor='red', arrowstyle='->', lw=3, alpha=0.7))
 
@@ -218,7 +221,7 @@ with save_col2:
             chain_mm = chain_type.split(" ")[0] 
             st.session_state.saved_configs.append({
                 "店舗_筐体名": st.session_state.store_name,
-                "フック": f"{hook_clock}時 (先端{hook_length}cm)",
+                "フック": f"{hook_clock}時 (開口サイズ{hook_size}cm)",
                 "自動_UFO停止": f"X: {u_x_a:+.1f} / Y: {u_y_a:+.1f}" if possible_a else "到達不可",
                 "手動_UFO停止": f"X: {u_x_m:+.1f} / Y: {u_y_m:+.1f}" if possible_m else "到達不可"
             })
