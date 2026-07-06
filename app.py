@@ -61,14 +61,14 @@ L_chain = st.sidebar.number_input("チェーンの長さ (cm)", value=15.0, step
 
 st.sidebar.subheader("⭕ リング")
 D_ring = st.sidebar.number_input("リングの直径 (cm)", value=10.0, step=0.1, format="%.1f")
-# リングの太さのバリエーションを追加
+# ★リングの太さのデフォルトを 6.0mm (index=2) に設定
 ring_type = st.sidebar.selectbox("リングの線の太さ", [
     "8.0mm (極太)",
     "7.0mm (太め)",
     "6.0mm (標準・カインズ基準)", 
     "5.0mm (やや細め)", 
     "4.0mm (細め)"
-])
+], index=2)
 d_ring_mm = float(ring_type.split("mm")[0])
 
 # ==========================================
