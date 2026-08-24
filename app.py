@@ -9,10 +9,52 @@ import csv
 from datetime import datetime
 
 # ページ設定
-st.set_page_config(page_title="クレーンゲーム攻略予測", layout="centered")
+st.set_page_config(page_title="フック攻略予測", layout="centered")
 
-st.title("🎮 クレーンゲーム 横揺れ(X軸)攻略予測")
-st.caption("自動計算（赤）と手動の周期（青）を同時に比較し、ベストなタイミングを算出・保存します。")
+# ==========================================
+# デザイン(CSS)
+# ==========================================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+
+html, body, [class*="css"]  { font-family: 'Noto Sans JP', sans-serif; }
+
+/* タブ */
+.stTabs [data-baseweb="tab-list"] { gap: 6px; }
+.stTabs [data-baseweb="tab"] {
+    height: 48px; border-radius: 10px 10px 0 0; padding: 0 18px;
+    font-weight: 700; font-size: 15px;
+}
+.stTabs [aria-selected="true"] { background-color: #F0EEFE; }
+
+/* カード風コンテナ */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 16px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ボタン */
+.stButton > button {
+    border-radius: 10px; font-weight: 700; padding: 10px 0;
+}
+
+/* number/select input */
+div[data-testid="stNumberInput"] input, div[data-baseweb="select"] {
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="background:linear-gradient(135deg,#6C5CE7,#00B4D8);
+            padding:22px 24px;border-radius:16px;margin-bottom:18px;">
+  <div style="color:white;font-size:26px;font-weight:900;">🪝 フック攻略予測</div>
+  <div style="color:#EFEDFE;font-size:13px;margin-top:4px;">
+    自動計算(赤) × 実測周期(青) でベストタイミングを算出・保存
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --- 保存データと入力欄の初期化 (セッションステート) ---
 if "saved_configs" not in st.session_state:
@@ -21,11 +63,9 @@ if "saved_configs" not in st.session_state:
 if "store_name" not in st.session_state:
     st.session_state.store_name = f"{datetime.now().strftime('%m/%d')} 〇〇店 UFO9 1番台 右側"
 
-if "t_d" not in st.session_state:
-    st.session_state.t_d = 3.00
-
 if "hook_clock" not in st.session_state:
     st.session_state.hook_clock = 3
+
 
 # --- 共通の計算関数 ---
 def calc_timing(T, t_d, hook_clock):
@@ -50,12 +90,16 @@ def calc_timing(T, t_d, hook_clock):
     return x_pos, y_pos, v_x
 
 
-def adjust_t_d(delta):
-    st.session_state.t_d = round(max(0.1, st.session_state.t_d + delta), 2)
+def set_hook(n):
+    st.session_state.hook_clock = n
+
+
+def set_hook_other():
+    st.session_state.hook_clock = int(st.session_state.hook_other_input)
 
 
 # ==========================================
-# データ読み込み(JSON) — 一番上に置いて出先でもすぐ復元できるように
+# データ読み込み(JSON)
 # ==========================================
 with st.expander("📂 保存データを読み込む（前回のJSONファイル）", expanded=False):
     uploaded = st.file_uploader("JSONファイルを選択", type=["json"], label_visibility="collapsed")
@@ -63,7 +107,6 @@ with st.expander("📂 保存データを読み込む（前回のJSONファイ�
         try:
             loaded = json.load(uploaded)
             if isinstance(loaded, list):
-                # 重複を避けつつ追加
                 existing_names = {c.get("店舗_筐体名") for c in st.session_state.saved_configs}
                 added = 0
                 for item in loaded:
@@ -76,57 +119,18 @@ with st.expander("📂 保存データを読み込む（前回のJSONファイ�
         except Exception as e:
             st.error(f"読み込みに失敗しました: {e}")
 
-st.divider()
-
 # ==========================================
-# タブ構成（スマホでサイドバーを開閉する手間をなくす）
+# タブ構成
+# 変更頻度が高い「パーツ設定(チェーン・リング)」を最優先タブに配置
 # ==========================================
-tab1, tab2, tab3 = st.tabs(["🕹️ プレイ条件", "⚙️ パーツ設定", "📋 保存データ"])
+tab1, tab2, tab3 = st.tabs(["⚙️ パーツ設定", "🕹️ プレイ条件", "📋 保存データ"])
 
 # ------------------------------------------
-# タブ1: プレイ条件（毎回入力する頻度が高い項目）
+# タブ1: パーツ設定（台ごとに変える最重要項目）
 # ------------------------------------------
 with tab1:
-    st.subheader("奥移動〜落下までの時間")
-    st.number_input(
-        "秒", value=st.session_state.t_d, step=0.1, format="%.2f", key="t_d_input",
-        on_change=lambda: st.session_state.update(t_d=st.session_state.t_d_input),
-    )
-    st.session_state.t_d = st.session_state.t_d_input
-
-    qcol1, qcol2, qcol3, qcol4 = st.columns(4)
-    with qcol1:
-        st.button("−0.5", use_container_width=True, on_click=adjust_t_d, args=(-0.5,))
-    with qcol2:
-        st.button("−0.1", use_container_width=True, on_click=adjust_t_d, args=(-0.1,))
-    with qcol3:
-        st.button("+0.1", use_container_width=True, on_click=adjust_t_d, args=(0.1,))
-    with qcol4:
-        st.button("+0.5", use_container_width=True, on_click=adjust_t_d, args=(0.5,))
-
-    t_d = st.session_state.t_d
-
-    st.subheader("フックの向き（時計の文字盤）")
-    st.caption(f"現在の選択: **{st.session_state.hook_clock}時**")
-    clock_layout = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]
-    for row in clock_layout:
-        cols = st.columns(4)
-        for i, num in enumerate(row):
-            is_selected = st.session_state.hook_clock == num
-            label = f"● {num}" if is_selected else str(num)
-            if cols[i].button(label, key=f"clock_{num}", use_container_width=True):
-                st.session_state.hook_clock = num
-    hook_clock = float(st.session_state.hook_clock)
-
-    st.subheader("🔵 手動入力（実測の周期）")
-    T_manual = st.number_input("1往復の秒数", value=0.85, step=0.01, format="%.2f")
-
-# ------------------------------------------
-# タブ2: パーツ設定（毎回は変えない項目なので分離）
-# ------------------------------------------
-with tab2:
-    st.subheader("🔴 自動計算（チェーン＋リング）")
-    st.caption("※モノタロウ規格（鉄マンテルチェーン）の実測値準拠")
+    st.markdown("##### 🔴 自動計算（チェーン＋リング）")
+    st.caption("モノタロウ規格（鉄マンテルチェーン）の実測値準拠")
 
     chain_type = st.selectbox("チェーンの線径 (規格質量)", [
         "1.6mm (0.58 g/cm)",
@@ -136,7 +140,7 @@ with tab2:
     ])
     L_chain = st.number_input("チェーンの長さ (cm)", value=15.0, step=1.0, format="%.1f")
 
-    st.subheader("⭕ リング")
+    st.markdown("##### ⭕ リング")
     D_ring = st.number_input("リングの直径 (cm)", value=10.0, step=0.1, format="%.1f")
     ring_type = st.selectbox("リングの線の太さ", [
         "8.0mm (極太)",
@@ -146,6 +150,43 @@ with tab2:
         "4.0mm (細め)"
     ], index=2)
     d_ring_mm = float(ring_type.split("mm")[0])
+
+    st.divider()
+    st.markdown("##### 🔵 手動入力（実測の周期）")
+    T_manual = st.number_input("1往復の秒数", value=0.85, step=0.01, format="%.2f")
+
+# ------------------------------------------
+# タブ2: プレイ条件（落下時間・フック向き）
+# ------------------------------------------
+with tab2:
+    st.markdown("##### 奥移動〜落下までの時間")
+    t_d = st.number_input("秒", value=3.00, step=0.1, format="%.2f", label_visibility="collapsed")
+
+    st.markdown("##### フックの向き")
+    st.caption("お店の設定はほぼ 3時 か 9時 のどちらか")
+    hcol1, hcol2 = st.columns(2)
+    with hcol1:
+        st.button(
+            "🕒 3時", use_container_width=True,
+            type="primary" if st.session_state.hook_clock == 3 else "secondary",
+            on_click=set_hook, args=(3,),
+        )
+    with hcol2:
+        st.button(
+            "🕘 9時", use_container_width=True,
+            type="primary" if st.session_state.hook_clock == 9 else "secondary",
+            on_click=set_hook, args=(9,),
+        )
+
+    with st.expander(f"その他の時刻を指定（現在: {st.session_state.hook_clock}時）"):
+        st.number_input(
+            "時計の文字盤 (1〜12)",
+            value=float(st.session_state.hook_clock),
+            min_value=1.0, max_value=12.0, step=1.0,
+            key="hook_other_input", on_change=set_hook_other,
+        )
+
+    hook_clock = float(st.session_state.hook_clock)
 
 # ==========================================
 # 自動計算の物理ロジック
@@ -184,24 +225,32 @@ L_manual_cm = 0
 if T_manual > 0:
     L_manual_cm = g * (T_manual / (2 * math.pi)) ** 2 * 100
 
+
+def render_badge(label, color, direction, pct, sub):
+    st.markdown(f"""
+    <div style="background:{color}12;border:1px solid {color}55;border-radius:14px;
+                padding:16px;text-align:center;">
+        <div style="font-size:13px;color:{color};font-weight:700;margin-bottom:6px;">{label}</div>
+        <div style="font-size:30px;font-weight:900;color:{color};line-height:1.1;">{direction} {pct}%</div>
+        <div style="font-size:12px;color:#666;margin-top:6px;">{sub}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # ==========================================
-# 結果表示（タブの外＝常に見える位置に固定）
+# 結果表示
 # ==========================================
-st.divider()
-st.subheader("📊 予測結果")
+st.markdown("### 📊 予測結果")
 
 rcol1, rcol2 = st.columns(2)
 with rcol1:
-    st.markdown("**🔴 自動計算**")
-    st.write(f"周期: 約 {T_auto:.2f}秒 (重心 {L_cm:.1f}cm)")
     if T_auto > 0:
-        st.markdown(f"### {'右' if x_auto >= 0 else '左'}側 約{abs(x_auto*100):.0f}% / {dir_auto}方向")
-
+        render_badge("🔴 自動計算", "#e63946", "右" if x_auto >= 0 else "左", f"{abs(x_auto*100):.0f}",
+                     f"周期 約{T_auto:.2f}秒 / 重心 {L_cm:.1f}cm")
 with rcol2:
-    st.markdown("**🔵 手動入力**")
-    st.write(f"周期: {T_manual:.2f}秒 (逆算重心 {L_manual_cm:.1f}cm)")
     if T_manual > 0:
-        st.markdown(f"### {'右' if x_manual >= 0 else '左'}側 約{abs(x_manual*100):.0f}% / {dir_manual}方向")
+        render_badge("🔵 手動入力", "#457b9d", "右" if x_manual >= 0 else "左", f"{abs(x_manual*100):.0f}",
+                     f"周期 {T_manual:.2f}秒 / 逆算重心 {L_manual_cm:.1f}cm")
 
 # --- 1次元グラフ描画 ---
 fig, ax = plt.subplots(figsize=(8, 3))
@@ -237,10 +286,10 @@ st.pyplot(fig)
 # データの保存機能
 # ==========================================
 st.divider()
-st.subheader("💾 現在のパラメータを保存")
+st.markdown("### 💾 現在のパラメータを保存")
 
 st.text_input("店舗・筐体名 (例: 〇〇店 UFO9 1番台 右側)", key="store_name")
-if st.button("設定を保存する", use_container_width=True):
+if st.button("設定を保存する", use_container_width=True, type="primary"):
     if st.session_state.store_name:
         chain_mm = chain_type.split(" ")[0]
 
@@ -270,7 +319,6 @@ with tab3:
     else:
         st.caption("※VXは動く方向（Velocity X）を示します。")
 
-        # --- 書き出し(JSON / CSV) ---
         dcol1, dcol2 = st.columns(2)
         json_bytes = json.dumps(st.session_state.saved_configs, ensure_ascii=False, indent=2).encode("utf-8")
         with dcol1:
