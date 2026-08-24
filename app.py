@@ -60,6 +60,15 @@ MACHINE_OPTIONS = ["UFO10", "UFO9", "BLAST D", "UFO8", "UFO7", "クレナ2", "�
 # ==========================================
 # 計算関数（物理モデル）
 # ==========================================
+def get_amplitude(T, speed_level):
+    """周期と速度から、実際の振幅(cm)を算出する"""
+    if T <= 0:
+        return 0.0
+    speeds = {"大": 20.0, "中": 15.0, "小": 10.0}
+    V = speeds.get(speed_level[0], 15.0)
+    omega = 2 * math.pi / T
+    return V / omega
+
 def calc_physics(T, t_move, t_drop, hook_clock, speed_level):
     """
     奥移動の開始と停止に伴う加速度を考慮し、2次元(X/Y)の座標を正規化して返す。
@@ -417,35 +426,50 @@ with tab4:
     if T_auto <= 0 and T_manual <= 0:
         st.info("周期が計算できていません。「パーツ設定」タブを確認してください。")
     else:
+        # cm変換用の振幅(A)を取得
+        A_auto = get_amplitude(T_auto, speed_level)
+        A_manual = get_amplitude(T_manual, speed_level)
+        
         # --- 自動探索 ---
         best_auto, ts_a, xs_a, ys_a = find_best_timings(T_auto, t_move, hook_clock, speed_level, (target_x, target_y)) if T_auto > 0 else ([], np.array([]), np.array([]), np.array([]))
         best_manual, ts_m, xs_m, ys_m = find_best_timings(T_manual, t_move, hook_clock, speed_level, (target_x, target_y)) if T_manual > 0 else ([], np.array([]), np.array([]), np.array([]))
 
-        # --- 楕円軌道の可視化 ---
+        # --- 楕円軌道の可視化 (cm単位) ---
         fig2, ax2 = plt.subplots(figsize=(6, 6))
+        all_vals_cm = [5.0] # グラフの最小枠を±5cmにするための初期値
+        
         if len(xs_a) > 0:
-            ax2.plot(xs_a, ys_a, color='#e63946', alpha=0.5, linewidth=1.5, label="🔴 自動計算の軌道")
-            ax2.plot(x_auto, y_auto, 'o', color='#e63946', markersize=12)
+            xs_a_cm, ys_a_cm = xs_a * A_auto, ys_a * A_auto
+            ax2.plot(xs_a_cm, ys_a_cm, color='#e63946', alpha=0.5, linewidth=1.5, label="🔴 自動計算の軌道")
+            ax2.plot(x_auto * A_auto, y_auto * A_auto, 'o', color='#e63946', markersize=12)
             if best_auto:
-                bx, by = best_auto[0][2], best_auto[0][3]
-                ax2.plot(bx, by, '*', color='#e63946', markersize=20, markeredgecolor='black', markeredgewidth=0.6)
+                bx_cm, by_cm = best_auto[0][2] * A_auto, best_auto[0][3] * A_auto
+                ax2.plot(bx_cm, by_cm, '*', color='#e63946', markersize=20, markeredgecolor='black', markeredgewidth=0.6)
+            all_vals_cm.extend(xs_a_cm.tolist())
+            all_vals_cm.extend(ys_a_cm.tolist())
                 
         if len(xs_m) > 0:
-            ax2.plot(xs_m, ys_m, color='#457b9d', alpha=0.5, linewidth=1.5, label="🔵 手動入力の軌道")
-            ax2.plot(x_manual, y_manual, 'o', color='#457b9d', markersize=12)
+            xs_m_cm, ys_m_cm = xs_m * A_manual, ys_m * A_manual
+            ax2.plot(xs_m_cm, ys_m_cm, color='#457b9d', alpha=0.5, linewidth=1.5, label="🔵 手動入力の軌道")
+            ax2.plot(x_manual * A_manual, y_manual * A_manual, 'o', color='#457b9d', markersize=12)
             if best_manual:
-                bx, by = best_manual[0][2], best_manual[0][3]
-                ax2.plot(bx, by, '*', color='#457b9d', markersize=20, markeredgecolor='black', markeredgewidth=0.6)
+                bx_cm, by_cm = best_manual[0][2] * A_manual, best_manual[0][3] * A_manual
+                ax2.plot(bx_cm, by_cm, '*', color='#457b9d', markersize=20, markeredgecolor='black', markeredgewidth=0.6)
+            all_vals_cm.extend(xs_m_cm.tolist())
+            all_vals_cm.extend(ys_m_cm.tolist())
 
-        ax2.plot(target_x, target_y, 'g+', markersize=16, markeredgewidth=3, label="🎯 目標位置")
+        ref_A = A_auto if T_auto > 0 else A_manual
+        tx_cm, ty_cm = target_x * ref_A, target_y * ref_A
+        ax2.plot(tx_cm, ty_cm, 'g+', markersize=16, markeredgewidth=3, label="🎯 目標位置")
+        all_vals_cm.extend([tx_cm, ty_cm])
+
         ax2.axhline(0, color='gray', linestyle=':', linewidth=0.8)
         ax2.axvline(0, color='gray', linestyle=':', linewidth=0.8)
-        ax2.set_xlabel("← 左  X(左右)  右 →")
-        ax2.set_ylabel("← 手前  Y(奥行き)  奥 →")
+        ax2.set_xlabel("← 左  X(左右) [cm]  右 →")
+        ax2.set_ylabel("← 手前  Y(奥行き) [cm]  奥 →")
         ax2.set_aspect('equal', adjustable='box')
 
-        all_vals = np.concatenate([xs_a, ys_a, xs_m, ys_m, np.array([target_x, target_y, 0.3])])
-        lim = max(0.5, np.nanmax(np.abs(all_vals)) * 1.25) if len(all_vals) else 1.2
+        lim = np.nanmax(np.abs(all_vals_cm)) * 1.15
         ax2.set_xlim(-lim, lim)
         ax2.set_ylim(-lim, lim)
         ax2.legend(loc='upper right', fontsize=8)
@@ -454,7 +478,7 @@ with tab4:
 
         st.divider()
 
-        # --- 現在地と推奨タイミング ---
+        # --- 現在地と推奨タイミング (テキストは％表記のまま) ---
         rcol_a, rcol_b = st.columns(2)
         with rcol_a:
             st.markdown("**🔴 自動計算**")
