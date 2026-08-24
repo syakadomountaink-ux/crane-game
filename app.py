@@ -76,23 +76,19 @@ def calc_physics(T, t_move, t_drop, hook_clock, speed_level):
     if T <= 0:
         return 0.0, 0.0, 0.0
     
-    # 速度の設定 (cm/s)
     speeds = {"大": 20.0, "中": 15.0, "小": 10.0}
     V = speeds.get(speed_level[0], 15.0)
     
     omega = 2 * math.pi / T
-    A = V / omega  # 基準となる振幅
+    A = V / omega
     
     t_total = t_move + t_drop
     
-    # X成分（横移動の停止に起因）
     disp_X_raw = A * math.sin(omega * t_total)
     vx_raw = V * math.cos(omega * t_total)
     
-    # Y成分（奥移動の開始と停止に起因する合成波）
     disp_Y_raw = -2 * A * math.sin(math.pi * t_move / T) * math.cos(omega * t_total - math.pi * t_move / T)
     
-    # フックの向きによる角度回転
     target_deg = (3 - hook_clock) * 30
     if target_deg < 0:
         target_deg += 360
@@ -101,7 +97,6 @@ def calc_physics(T, t_move, t_drop, hook_clock, speed_level):
     final_x = disp_X_raw * math.cos(hook_rad)
     final_y = (disp_X_raw * math.sin(hook_rad)) + disp_Y_raw
     
-    # UI表示用に振幅Aで正規化（-1.0 〜 1.0の割合にする）
     norm_x = final_x / A if A != 0 else 0
     norm_y = final_y / A if A != 0 else 0
     norm_vx = vx_raw * math.cos(hook_rad)
@@ -157,6 +152,11 @@ def compose_store_name():
     ]
     st.session_state.store_name = " ".join(p for p in parts if p)
 
+def format_relative_pos(x_cm, y_cm):
+    """フックからの相対位置を分かりやすい日本語文字列にフォーマットする"""
+    x_str = f"右に {x_cm:.1f}cm" if x_cm >= 0 else f"左に {abs(x_cm):.1f}cm"
+    y_str = f"奥に {y_cm:.1f}cm" if y_cm >= 0 else f"手前に {abs(y_cm):.1f}cm"
+    return f"{x_str} / {y_str}"
 
 # ==========================================
 # データ読み込み(JSON)
@@ -180,9 +180,9 @@ with st.expander("📂 保存データを読み込む（前回のJSONファイ�
             st.error(f"読み込みに失敗しました: {e}")
 
 # ==========================================
-# タブ構成
+# タブ構成（順番変更）
 # ==========================================
-tab1, tab2, tab3, tab4 = st.tabs(["⚙️ パーツ設定", "🕹️ プレイ条件", "📋 保存データ", "🎯 2D解析(奥揺れ)"])
+tab1, tab2, tab3, tab4 = st.tabs(["⚙️ パーツ設定", "🕹️ プレイ条件", "🎯 2D解析(奥揺れ)", "📋 保存データ"])
 
 # ------------------------------------------
 # タブ1: パーツ設定
@@ -256,7 +256,6 @@ with tab2:
 
     hook_clock = float(st.session_state.hook_clock)
 
-
 # ==========================================
 # 自動計算ロジック
 # ==========================================
@@ -297,8 +296,9 @@ def render_badge(label, color, direction, pct, sub):
     </div>
     """, unsafe_allow_html=True)
 
+
 # ==========================================
-# 結果表示 (1D X軸プロット)
+# 共通表示 (1D X軸プロット + 保存機能)
 # ==========================================
 st.markdown("### 📊 予測結果 (X軸)")
 
@@ -340,9 +340,6 @@ ax.set_ylim(-0.7, 0.7)
 ax.axis('off')
 st.pyplot(fig)
 
-# ==========================================
-# データの保存機能
-# ==========================================
 st.divider()
 st.markdown("### 💾 現在のパラメータを保存")
 
@@ -381,41 +378,11 @@ if st.button("設定を保存する", use_container_width=True, type="primary"):
     else:
         st.warning("店舗・筐体名を入力してください。")
 
+
 # ------------------------------------------
-# タブ3: 保存データ一覧
+# タブ3: 2D解析（軌道探索）
 # ------------------------------------------
 with tab3:
-    if len(st.session_state.saved_configs) == 0:
-        st.info("まだ保存されたデータがありません。")
-    else:
-        dcol1, dcol2 = st.columns(2)
-        json_bytes = json.dumps(st.session_state.saved_configs, ensure_ascii=False, indent=2).encode("utf-8")
-        with dcol1:
-            st.download_button("📥 JSONで保存", data=json_bytes, file_name=f"crane_data_{datetime.now().strftime('%Y%m%d_%H%M')}.json", mime="application/json", use_container_width=True)
-
-        csv_buf = io.StringIO()
-        if st.session_state.saved_configs:
-            writer = csv.DictWriter(csv_buf, fieldnames=list(st.session_state.saved_configs[0].keys()))
-            writer.writeheader()
-            writer.writerows(st.session_state.saved_configs)
-        with dcol2:
-            st.download_button("📊 CSVで保存", data=csv_buf.getvalue().encode("utf-8-sig"), file_name=f"crane_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", mime="text/csv", use_container_width=True)
-
-        st.divider()
-        for idx, data in enumerate(reversed(st.session_state.saved_configs)):
-            with st.container(border=True):
-                st.markdown(f"### 🕹️ {data['店舗_筐体名']}")
-                st.markdown(f"**🔹 操作:** {data['移動時間']} / 速度:{data['速度']} / フック:{data['フック向き']}")
-                st.markdown(f"🔴 **自動:** 左右 **{data['自動_位置']}** (周期 {data['自動_周期']})")
-                st.markdown(f"🔵 **手動:** 左右 **{data['手動_位置']}** (周期 {data['手動_周期']})")
-        if st.button("🗑️ 保存データをすべて消去", use_container_width=True):
-            st.session_state.saved_configs = []
-            st.rerun()
-
-# ------------------------------------------
-# タブ4: 2D解析（軌道探索）
-# ------------------------------------------
-with tab4:
     st.caption("奥移動の開始と停止に伴う加速度を理論式で計算し、X/Y平面上の楕円軌道を可視化します。")
 
     with st.expander("🎯 目標位置を調整（通常は中央=0%のままでOK）"):
@@ -426,7 +393,6 @@ with tab4:
     if T_auto <= 0 and T_manual <= 0:
         st.info("周期が計算できていません。「パーツ設定」タブを確認してください。")
     else:
-        # cm変換用の振幅(A)を取得
         A_auto = get_amplitude(T_auto, speed_level)
         A_manual = get_amplitude(T_manual, speed_level)
         
@@ -436,7 +402,7 @@ with tab4:
 
         # --- 楕円軌道の可視化 (cm単位) ---
         fig2, ax2 = plt.subplots(figsize=(6, 6))
-        all_vals_cm = [5.0] # グラフの最小枠を±5cmにするための初期値
+        all_vals_cm = [5.0] 
         
         if len(xs_a) > 0:
             xs_a_cm, ys_a_cm = xs_a * A_auto, ys_a * A_auto
@@ -474,30 +440,71 @@ with tab4:
         ax2.set_ylim(-lim, lim)
         ax2.legend(loc='upper right', fontsize=8)
         st.pyplot(fig2)
-        st.caption("● = 現在の待ち時間での位置 ★ = 最適な待ち時間での位置")
+        st.caption("● = 現在の待ち時間での位置 ★ = 最適なタイミングでの位置")
 
         st.divider()
 
-        # --- 現在地と推奨タイミング (テキストは％表記のまま) ---
+        # --- 現在地と推奨タイミング (相対座標での表示) ---
         rcol_a, rcol_b = st.columns(2)
         with rcol_a:
             st.markdown("**🔴 自動計算**")
             if T_auto > 0:
-                st.write(f"現在(待機 {t_drop:.2f}秒): X {x_auto*100:+.0f}% / Y {y_auto*100:+.0f}%")
+                st.write(f"現在位置 (待機 {t_drop:.2f}秒):")
+                st.write(f"👉 フックから **{format_relative_pos(x_auto * A_auto, y_auto * A_auto)}**")
+                
                 if best_auto:
-                    st.success("おすすめの待ち時間 (落下まで)")
+                    st.success("おすすめの待ち時間と停止位置")
                     for bt, bd, bx, by in best_auto:
-                        st.markdown(f"- **{bt:.2f}秒** → X {bx*100:+.0f}% / Y {by*100:+.0f}% (誤差 {bd*100:.0f}%)")
+                        bx_cm = bx * A_auto
+                        by_cm = by * A_auto
+                        st.markdown(f"- 待機 **{bt:.2f}秒** ･･･ フックから **{format_relative_pos(bx_cm, by_cm)}** (誤差 {bd * A_auto:.1f}cm)")
             else:
                 st.caption("周期未計算")
 
         with rcol_b:
             st.markdown("**🔵 手動入力**")
             if T_manual > 0:
-                st.write(f"現在(待機 {t_drop:.2f}秒): X {x_manual*100:+.0f}% / Y {y_manual*100:+.0f}%")
+                st.write(f"現在位置 (待機 {t_drop:.2f}秒):")
+                st.write(f"👉 フックから **{format_relative_pos(x_manual * A_manual, y_manual * A_manual)}**")
+                
                 if best_manual:
-                    st.success("おすすめの待ち時間 (落下まで)")
+                    st.success("おすすめの待ち時間と停止位置")
                     for bt, bd, bx, by in best_manual:
-                        st.markdown(f"- **{bt:.2f}秒** → X {bx*100:+.0f}% / Y {by*100:+.0f}% (誤差 {bd*100:.0f}%)")
+                        bx_cm = bx * A_manual
+                        by_cm = by * A_manual
+                        st.markdown(f"- 待機 **{bt:.2f}秒** ･･･ フックから **{format_relative_pos(bx_cm, by_cm)}** (誤差 {bd * A_manual:.1f}cm)")
             else:
                 st.caption("周期未計算")
+
+# ------------------------------------------
+# タブ4: 保存データ一覧
+# ------------------------------------------
+with tab4:
+    if len(st.session_state.saved_configs) == 0:
+        st.info("まだ保存されたデータがありません。")
+    else:
+        dcol1, dcol2 = st.columns(2)
+        json_bytes = json.dumps(st.session_state.saved_configs, ensure_ascii=False, indent=2).encode("utf-8")
+        with dcol1:
+            st.download_button("📥 JSONで保存", data=json_bytes, file_name=f"crane_data_{datetime.now().strftime('%Y%m%d_%H%M')}.json", mime="application/json", use_container_width=True)
+
+        csv_buf = io.StringIO()
+        if st.session_state.saved_configs:
+            writer = csv.DictWriter(csv_buf, fieldnames=list(st.session_state.saved_configs[0].keys()))
+            writer.writeheader()
+            writer.writerows(st.session_state.saved_configs)
+        with dcol2:
+            st.download_button("📊 CSVで保存", data=csv_buf.getvalue().encode("utf-8-sig"), file_name=f"crane_data_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", mime="text/csv", use_container_width=True)
+
+        st.divider()
+        for idx, data in enumerate(reversed(st.session_state.saved_configs)):
+            with st.container(border=True):
+                st.markdown(f"### 🕹️ {data['店舗_筐体名']}")
+                st.markdown(f"**🔹 操作:** {data['移動時間']} / 速度:{data['速度']} / フック:{data['フック向き']}")
+                st.markdown(f"🔴 **自動:** 左右 **{data['自動_位置']}** (周期 {data['自動_周期']})")
+                st.markdown(f"🔵 **手動:** 左右 **{data['手動_位置']}** (周期 {data['手動_周期']})")
+        
+        st.write("")
+        if st.button("🗑️ 保存データをすべて消去", use_container_width=True):
+            st.session_state.saved_configs = []
+            st.rerun()
