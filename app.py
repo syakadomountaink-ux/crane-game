@@ -78,17 +78,16 @@ def calc_decoupled_pos(T, t_d, t_move, hook_clock, speed_level):
     A = get_amplitude(T, speed_level)
     omega = 2 * math.pi / T
     
-    # フックの向き（3時を基準に、9時は180度反対なので符号が反転）
     # 3時 -> cos(0) = 1, 9時 -> cos(180°) = -1
     target_deg = (3 - hook_clock) * 30
     if target_deg < 0:
         target_deg += 360
     hook_factor = math.cos(math.radians(target_deg))
     
-    # 横移動停止からt_d経過後のX位置（フックの向きで反転を考慮）
+    # 横移動停止からt_d経過後のX位置（フック向きを反映）
     x_cm = A * math.sin(omega * t_d) * hook_factor
     
-    # 奥移動開始からt_move経過後のY位置（奥行きはフックの向きの影響を受けない独立成分）
+    # 奥移動開始からt_move経過後のY位置
     y_cm = -A * math.sin(omega * t_move)
     
     return x_cm, y_cm, A
@@ -250,7 +249,8 @@ T_auto = 2 * math.pi * math.sqrt((L_cm / 100.0) / g) if L_cm > 0 else 0
 L_manual_cm = g * (T_manual / (2 * math.pi)) ** 2 * 100 if T_manual > 0 else 0
 
 x_cm_auto, y_cm_auto, A_auto = calc_decoupled_pos(T_auto, t_d, t_move, hook_clock, speed_level)
-x_cm_manual, y_cm_manual, A_manual = calc_decoupled_pos(T_manual, t_d, t_move, speed_level)
+# 修正箇所: hook_clock を渡すように修正
+x_cm_manual, y_cm_manual, A_manual = calc_decoupled_pos(T_manual, t_d, t_move, hook_clock, speed_level)
 
 x_norm_auto = x_cm_auto / A_auto if A_auto > 0 else 0
 x_norm_manual = x_cm_manual / A_manual if A_manual > 0 else 0
