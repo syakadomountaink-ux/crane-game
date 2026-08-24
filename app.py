@@ -58,10 +58,9 @@ STORE_OPTIONS = ["トレジャーランド", "もってきーな茂原", "もっ
 MACHINE_OPTIONS = ["UFO10", "UFO9", "BLAST D", "UFO8", "UFO7", "クレナ2", "クレフレ"]
 
 # ==========================================
-# 計算関数（分離型物理モデル）
+# 計算関数（分離型物理モデル + フック向き反映）
 # ==========================================
 def get_amplitude(T, speed_level):
-    """周期と速度から、実際の振幅(cm)を算出する"""
     if T <= 0:
         return 0.0
     speeds = {"大": 20.0, "中": 15.0, "小": 10.0}
@@ -69,10 +68,9 @@ def get_amplitude(T, speed_level):
     omega = 2 * math.pi / T
     return V / omega
 
-def calc_decoupled_pos(T, t_d, t_move, speed_level):
+def calc_decoupled_pos(T, t_d, t_move, hook_clock, speed_level):
     """
-    横移動(X)と奥移動(Y)を完全に独立した波として計算し、
-    落下時点でのリングの相対座標(cm単位)を返す。
+    横移動(X)と奥移動(Y)を計算し、フックの向き（3時/9時など）による影響を反映する。
     """
     if T <= 0:
         return 0.0, 0.0, 0.0
@@ -80,15 +78,29 @@ def calc_decoupled_pos(T, t_d, t_move, speed_level):
     A = get_amplitude(T, speed_level)
     omega = 2 * math.pi / T
     
-    x_cm = A * math.sin(omega * t_d)
+    # フックの向き（3時を基準に、9時は180度反対なので符号が反転）
+    # 3時 -> cos(0) = 1, 9時 -> cos(180°) = -1
+    target_deg = (3 - hook_clock) * 30
+    if target_deg < 0:
+        target_deg += 360
+    hook_factor = math.cos(math.radians(target_deg))
+    
+    # 横移動停止からt_d経過後のX位置（フックの向きで反転を考慮）
+    x_cm = A * math.sin(omega * t_d) * hook_factor
+    
+    # 奥移動開始からt_move経過後のY位置（奥行きはフックの向きの影響を受けない独立成分）
     y_cm = -A * math.sin(omega * t_move)
     
     return x_cm, y_cm, A
 
-def get_vx_sign(T, t_d):
+def get_vx_sign(T, t_d, hook_clock):
     if T <= 0: return 1
     omega = 2 * math.pi / T
-    return 1 if math.cos(omega * t_d) >= 0 else -1
+    target_deg = (3 - hook_clock) * 30
+    if target_deg < 0: target_deg += 360
+    hook_factor = math.cos(math.radians(target_deg))
+    val = math.cos(omega * t_d) * hook_factor
+    return 1 if val >= 0 else -1
 
 # --- UI用ヘルパー ---
 def set_hook(n):
@@ -237,14 +249,14 @@ g = 9.80665
 T_auto = 2 * math.pi * math.sqrt((L_cm / 100.0) / g) if L_cm > 0 else 0
 L_manual_cm = g * (T_manual / (2 * math.pi)) ** 2 * 100 if T_manual > 0 else 0
 
-x_cm_auto, y_cm_auto, A_auto = calc_decoupled_pos(T_auto, t_d, t_move, speed_level)
+x_cm_auto, y_cm_auto, A_auto = calc_decoupled_pos(T_auto, t_d, t_move, hook_clock, speed_level)
 x_cm_manual, y_cm_manual, A_manual = calc_decoupled_pos(T_manual, t_d, t_move, speed_level)
 
 x_norm_auto = x_cm_auto / A_auto if A_auto > 0 else 0
 x_norm_manual = x_cm_manual / A_manual if A_manual > 0 else 0
 
-v_sign_auto = get_vx_sign(T_auto, t_d)
-v_sign_manual = get_vx_sign(T_manual, t_d)
+v_sign_auto = get_vx_sign(T_auto, t_d, hook_clock)
+v_sign_manual = get_vx_sign(T_manual, t_d, hook_clock)
 
 def render_badge(label, color, direction, pct, sub):
     st.markdown(f"""
@@ -291,27 +303,29 @@ with tab3:
         ax2.plot(0, 0, 'g+', markersize=20, markeredgewidth=3, label="🎯 狙いたい目標")
         all_vals = [0.0]
 
-        def plot_trajectory_with_arrow(T, t_d, t_move, A, H_x, H_y, color, label):
+        def plot_trajectory_with_arrow(T, t_d, t_move, hook_clock, A, H_x, H_y, color, label):
             if T <= 0: return
             omega = 2 * math.pi / T
+            target_deg = (3 - hook_clock) * 30
+            if target_deg < 0: target_deg += 360
+            hook_factor = math.cos(math.radians(target_deg))
+
             t_max = max(t_d, t_move)
             ts = np.linspace(-t_max, 0, 300)
             Rx, Ry = np.zeros_like(ts), np.zeros_like(ts)
             
             for i, t in enumerate(ts):
-                x_rel = A * math.sin(omega * (t + t_d)) if t >= -t_d else 0
+                x_rel = A * math.sin(omega * (t + t_d)) * hook_factor if t >= -t_d else 0
                 y_rel = -A * math.sin(omega * (t + t_move)) if t >= -t_move else 0
                 Rx[i] = H_x + x_rel
                 Ry[i] = H_y + y_rel
                 
-            # 軌道の描画
             ax2.plot(Rx, Ry, color=color, alpha=0.6, linewidth=2, label=f"{label} 軌道")
             ax2.plot(H_x, H_y, 's', color=color, markersize=10, label=f"{label} フック停止位置")
             
-            # 💡 回転方向（進行方向）を示す矢印を中途地点（例: 全体の40%と80%の場所）に追加
             for idx in [int(len(ts) * 0.35), int(len(ts) * 0.75)]:
                 p1_x, p1_y = Rx[idx], Ry[idx]
-                p2_x, p2_y = Rx[idx+2], Ry[idx+2] # 少し先の点との差分で方向を決定
+                p2_x, p2_y = Rx[idx+2], Ry[idx+2]
                 dx, dy = p2_x - p1_x, p2_y - p1_y
                 if math.hypot(dx, dy) > 0:
                     ax2.annotate('', xy=(p1_x + dx*2, p1_y + dy*2), xytext=(p1_x, p1_y),
@@ -319,8 +333,8 @@ with tab3:
 
             all_vals.extend(Rx.tolist() + Ry.tolist())
 
-        plot_trajectory_with_arrow(T_auto, t_d, t_move, A_auto, hx_auto, hy_auto, '#e63946', "🔴自動")
-        plot_trajectory_with_arrow(T_manual, t_d, t_move, A_manual, hx_manual, hy_manual, '#457b9d', "🔵手動")
+        plot_trajectory_with_arrow(T_auto, t_d, t_move, hook_clock, A_auto, hx_auto, hy_auto, '#e63946', "🔴自動")
+        plot_trajectory_with_arrow(T_manual, t_d, t_move, hook_clock, A_manual, hx_manual, hy_manual, '#457b9d', "🔵手動")
 
         ax2.axhline(0, color='gray', linestyle=':', linewidth=0.8)
         ax2.axvline(0, color='gray', linestyle=':', linewidth=0.8)
@@ -407,6 +421,7 @@ if st.button("設定を保存する", use_container_width=True, type="primary"):
             "店舗_筐体名": st.session_state.store_name,
             "操作時間": f"全体{t_d:.1f}s (奥{t_move:.1f}s)",
             "速度": speed_level.split(" ")[0],
+            "フック向き": f"{hook_clock:.0f}時",
             "チェーン": f"{chain_mm}, 長さ{L_chain:.1f}cm",
             "リング": f"直径{D_ring:.1f}cm (太さ{d_ring_mm:.1f}mm)",
             "自動_停止位置": format_aim_pos(-x_cm_auto, -y_cm_auto),
@@ -440,7 +455,7 @@ with tab4:
         for idx, data in enumerate(reversed(st.session_state.saved_configs)):
             with st.container(border=True):
                 st.markdown(f"### 🕹️ {data['店舗_筐体名']}")
-                st.markdown(f"**🔹 操作:** {data['操作時間']} / 速度:{data['速度']}")
+                st.markdown(f"**🔹 操作:** {data['操作時間']} / 速度:{data['速度']} / フック:{data['フック向き']}")
                 st.markdown(f"🔴 **自動の停止位置:** {data['自動_停止位置']}")
                 st.markdown(f"🔵 **手動の停止位置:** {data['手動_停止位置']}")
         
