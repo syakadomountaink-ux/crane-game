@@ -63,6 +63,12 @@ if "saved_configs" not in st.session_state:
 if "store_name" not in st.session_state:
     st.session_state.store_name = f"{datetime.now().strftime('%m/%d')} 〇〇店 UFO9 1番台 右側"
 
+if "side" not in st.session_state:
+    st.session_state.side = "右側"
+
+STORE_OPTIONS = ["トレジャーランド", "もってきーな茂原", "もってきーな椎名崎", "レジャーランド"]
+MACHINE_OPTIONS = ["UFO10", "UFO9", "BLAST D", "UFO8", "UFO7", "クレナ2", "クレフレ"]
+
 if "hook_clock" not in st.session_state:
     st.session_state.hook_clock = 3
 
@@ -96,6 +102,24 @@ def set_hook(n):
 
 def set_hook_other():
     st.session_state.hook_clock = int(st.session_state.hook_other_input)
+
+
+def set_side(s):
+    st.session_state.side = s
+    compose_store_name()
+
+
+def compose_store_name():
+    stall = st.session_state.get("stall_no", 0)
+    stall_part = f"{int(stall)}番台" if stall and stall > 0 else ""
+    parts = [
+        datetime.now().strftime("%m/%d"),
+        st.session_state.get("store_sel", ""),
+        st.session_state.get("machine_sel", ""),
+        stall_part,
+        st.session_state.side,
+    ]
+    st.session_state.store_name = " ".join(p for p in parts if p)
 
 
 # --- 2D(X+Y)拡張: 奥行き方向の揺れを含めた計算 ---
@@ -340,7 +364,29 @@ st.pyplot(fig)
 st.divider()
 st.markdown("### 💾 現在のパラメータを保存")
 
-st.text_input("店舗・筐体名 (例: 〇〇店 UFO9 1番台 右側)", key="store_name")
+qs_col1, qs_col2 = st.columns(2)
+with qs_col1:
+    st.selectbox("店舗", STORE_OPTIONS, key="store_sel", on_change=compose_store_name)
+with qs_col2:
+    st.selectbox("機種", MACHINE_OPTIONS, key="machine_sel", on_change=compose_store_name)
+
+sd_col1, sd_col2, sd_col3 = st.columns([1, 1, 1])
+with sd_col1:
+    st.button(
+        "⬅️ 左側", use_container_width=True,
+        type="primary" if st.session_state.side == "左側" else "secondary",
+        on_click=set_side, args=("左側",),
+    )
+with sd_col2:
+    st.button(
+        "➡️ 右側", use_container_width=True,
+        type="primary" if st.session_state.side == "右側" else "secondary",
+        on_click=set_side, args=("右側",),
+    )
+with sd_col3:
+    st.number_input("台番号(任意)", min_value=0, value=0, step=1, key="stall_no", on_change=compose_store_name)
+
+st.text_input("店舗・筐体名（上の選択から自動入力／手動で編集も可）", key="store_name")
 if st.button("設定を保存する", use_container_width=True, type="primary"):
     if st.session_state.store_name:
         chain_mm = chain_type.split(" ")[0]
