@@ -80,10 +80,7 @@ def calc_decoupled_pos(T, t_d, t_move, speed_level):
     A = get_amplitude(T, speed_level)
     omega = 2 * math.pi / T
     
-    # 横移動停止からt_d経過後のX位置
     x_cm = A * math.sin(omega * t_d)
-    
-    # 奥移動開始からt_move経過後(直後に落下)のY位置
     y_cm = -A * math.sin(omega * t_move)
     
     return x_cm, y_cm, A
@@ -117,7 +114,6 @@ def compose_store_name():
     st.session_state.store_name = " ".join(p for p in parts if p)
 
 def format_aim_pos(hx, hy):
-    """フックを止めるべき位置をテキスト化"""
     x_str = f"右に {abs(hx):.1f} cm" if hx >= 0 else f"左に {abs(hx):.1f} cm"
     y_str = f"奥に {abs(hy):.1f} cm" if hy >= 0 else f"手前に {abs(hy):.1f} cm"
     return f"{x_str} ／ {y_str}"
@@ -261,15 +257,14 @@ def render_badge(label, color, direction, pct, sub):
     """, unsafe_allow_html=True)
 
 # ------------------------------------------
-# タブ3: 2D解析（最適な停止位置）
+# タブ3: 2D解析（最適な停止位置 + 回転方向の矢印）
 # ------------------------------------------
 with tab3:
-    st.caption("横移動と奥移動の揺れを独立して計算し、目標地点に落下させるための「フックの最適な停止位置」を直接算出します。")
+    st.caption("横移動と奥移動の揺れを独立して計算し、目標地点に落下させるための「フックの最適な停止位置」と、リングの回転方向（軌道の向き）を可視化します。")
 
     if T_auto <= 0 and T_manual <= 0:
         st.info("周期が計算できていません。「パーツ設定」タブを確認してください。")
     else:
-        # フックの停止位置（リングの揺れ分を相殺する座標）
         hx_auto, hy_auto = -x_cm_auto, -y_cm_auto
         hx_manual, hy_manual = -x_cm_manual, -y_cm_manual
 
@@ -293,11 +288,10 @@ with tab3:
         # 軌道の可視化
         fig2, ax2 = plt.subplots(figsize=(6, 6))
         
-        # 目標地点(0,0)を描画
         ax2.plot(0, 0, 'g+', markersize=20, markeredgewidth=3, label="🎯 狙いたい目標")
         all_vals = [0.0]
 
-        def plot_trajectory(T, t_d, t_move, A, H_x, H_y, color, label):
+        def plot_trajectory_with_arrow(T, t_d, t_move, A, H_x, H_y, color, label):
             if T <= 0: return
             omega = 2 * math.pi / T
             t_max = max(t_d, t_move)
@@ -310,12 +304,23 @@ with tab3:
                 Rx[i] = H_x + x_rel
                 Ry[i] = H_y + y_rel
                 
-            ax2.plot(Rx, Ry, color=color, alpha=0.5, linewidth=2, label=f"{label} 軌道")
+            # 軌道の描画
+            ax2.plot(Rx, Ry, color=color, alpha=0.6, linewidth=2, label=f"{label} 軌道")
             ax2.plot(H_x, H_y, 's', color=color, markersize=10, label=f"{label} フック停止位置")
+            
+            # 💡 回転方向（進行方向）を示す矢印を中途地点（例: 全体の40%と80%の場所）に追加
+            for idx in [int(len(ts) * 0.35), int(len(ts) * 0.75)]:
+                p1_x, p1_y = Rx[idx], Ry[idx]
+                p2_x, p2_y = Rx[idx+2], Ry[idx+2] # 少し先の点との差分で方向を決定
+                dx, dy = p2_x - p1_x, p2_y - p1_y
+                if math.hypot(dx, dy) > 0:
+                    ax2.annotate('', xy=(p1_x + dx*2, p1_y + dy*2), xytext=(p1_x, p1_y),
+                                 arrowprops=dict(arrowstyle="->", color=color, lw=2, shrinkA=0, shrinkB=0))
+
             all_vals.extend(Rx.tolist() + Ry.tolist())
 
-        plot_trajectory(T_auto, t_d, t_move, A_auto, hx_auto, hy_auto, '#e63946', "🔴自動")
-        plot_trajectory(T_manual, t_d, t_move, A_manual, hx_manual, hy_manual, '#457b9d', "🔵手動")
+        plot_trajectory_with_arrow(T_auto, t_d, t_move, A_auto, hx_auto, hy_auto, '#e63946', "🔴自動")
+        plot_trajectory_with_arrow(T_manual, t_d, t_move, A_manual, hx_manual, hy_manual, '#457b9d', "🔵手動")
 
         ax2.axhline(0, color='gray', linestyle=':', linewidth=0.8)
         ax2.axvline(0, color='gray', linestyle=':', linewidth=0.8)
@@ -328,7 +333,7 @@ with tab3:
         ax2.set_ylim(-lim, lim)
         ax2.legend(loc='upper right', fontsize=8)
         st.pyplot(fig2)
-        st.caption("フックを四角(■)の位置に止めると、落下時にリングが振り子の勢いで目標(🎯)に到達します。")
+        st.caption("軌道上の矢印（➔）により、フック停止後にリングがどちらの回転方向へスイングするか一目でわかります。")
 
 # ==========================================
 # 共通表示 (1D X軸プロット + 保存機能)
