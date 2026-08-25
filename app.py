@@ -129,6 +129,12 @@ def format_aim_pos(hx, hy):
     y_str = f"奥に {abs(hy):.1f} cm" if hy >= 0 else f"手前に {abs(hy):.1f} cm"
     return f"{x_str} ／ {y_str}"
 
+def format_x_status(x_norm, v_sign):
+    """例: '左側 62% (→右方向)' のように、位置(%)と進行方向をまとめる。"""
+    side = "右側" if x_norm >= 0 else "左側"
+    arrow = "→右方向" if v_sign >= 0 else "←左方向"
+    return f"{side} {abs(x_norm) * 100:.0f}% ({arrow})"
+
 # ==========================================
 # データ読み込み(JSON)
 # ==========================================
@@ -424,7 +430,11 @@ if st.button("設定を保存する", use_container_width=True, type="primary"):
             "フック向き": f"{hook_clock:.0f}時",
             "チェーン": f"{chain_mm}, 長さ{L_chain:.1f}cm",
             "リング": f"直径{D_ring:.1f}cm (太さ{d_ring_mm:.1f}mm)",
+            "自動_周期": f"{T_auto:.2f}秒",
+            "自動_X位置": format_x_status(x_norm_auto, v_sign_auto),
             "自動_停止位置": format_aim_pos(-x_cm_auto, -y_cm_auto),
+            "手動_周期": f"{T_manual:.2f}秒",
+            "手動_X位置": format_x_status(x_norm_manual, v_sign_manual),
             "手動_停止位置": format_aim_pos(-x_cm_manual, -y_cm_manual)
         })
         st.success("保存しました！「保存データ」タブに追加されています。")
@@ -456,8 +466,8 @@ with tab4:
             with st.container(border=True):
                 st.markdown(f"### 🕹️ {data['店舗_筐体名']}")
                 st.markdown(f"**🔹 操作:** {data['操作時間']} / 速度:{data['速度']} / フック:{data['フック向き']}")
-                st.markdown(f"🔴 **自動の停止位置:** {data['自動_停止位置']}")
-                st.markdown(f"🔵 **手動の停止位置:** {data['手動_停止位置']}")
+                st.markdown(f"🔴 **自動:** 周期 {data['自動_周期']} / X位置 {data['自動_X位置']} / 停止位置 {data['自動_停止位置']}")
+                st.markdown(f"🔵 **手動:** 周期 {data['手動_周期']} / X位置 {data['手動_X位置']} / 停止位置 {data['手動_停止位置']}")
         
         st.write("")
         if st.button("🗑️ 保存データをすべて消去", use_container_width=True):
